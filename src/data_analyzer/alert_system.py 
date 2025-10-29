@@ -1,0 +1,356 @@
+#!/usr/bin/env python3
+"""
+Система уведомлений о значительных событиях
+"""
+
+from typing import Dict, List, Any, Optional
+from datetime import datetime
+import smtplib
+from email.mime.text import MimeText
+from email.mime.multipart import MimeMultipart
+
+from ..utils.logger import setup_logger
+from ..utils.error_handler import retry_on_failure
+
+
+class AlertSystem:
+    """Система уведомлений о критических изменениях"""
+    
+    def __init__(self, config: Dict[str, Any] = None):
+        self.config = config or {}
+        self.logger = setup_logger("alert_system")
+        
+        self.alert_settings = {
+            'price_change_threshold': 0.15,  # 15% изменение
+            'new_product_alert': True,
+            'discontinued_product_alert': True,
+            'high_volatility_alert': True,
+            'trend_reversal_alert': True,
+            'min_confidence': 0.7
+        }
+        
+        if 'alerts' in self.config:
+            self.alert_settings.update(self.config['alerts'])
+    
+    @retry_on_failure(max_retries=2)
+    def check_for_alerts(self, 
+                        price_comparison: Dict[str, Any],
+                        trend_analysis: Dict[str, Any],
+                        validation_results: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Проверка условий для уведомлений
+        
+        Args:
+            price_comparison: Результаты сравнения цен
+            trend_analysis: Результаты анализа трендов
+            validation_results: Результаты валидации
+            
+        Returns:
+            Dict: Найденные алерты
+        """
+        self.logger.info("🚨 Проверка условий для уведомлений")
+        
+        try:
+            alerts = {
+                'price_alerts': [],
+                'availability_alerts': [],
+                'trend_alerts': [],
+                'quality_alerts': [],
+                'summary': {
+                    'total_alerts': 0,
+                    'critical_alerts': 0,
+                    'warning_alerts': 0
+                }
+            }
+            
+            # Проверка изменений цен
+            alerts['price_alerts'] = self._check_price_alerts(price_comparison)
+            
+            # Проверка изменений наличия
+            alerts['availability_alerts'] = self._check_availability_alerts(price_comparison)
+            
+            # Проверка трендов
+            alerts['trend_alerts'] = self._check_trend_alerts(trend_analysis)
+            
+            # Проверка качества данных
+            alerts['quality_alerts'] = self._check_quality_alerts(validation_results)
+            
+            # Сводка
+            total_alerts = (len(alerts['price_alerts']) + 
+                          len(alerts['availability_alerts']) + 
+                          len(alerts['trend_alerts']) + 
+                          len(alerts['quality_alerts']))
+            
+            critical_alerts = sum(1 for alert_list in alerts.values() 
+                                if isinstance(alert_list, list) 
+                                for alert in alert_list if alert.get('level') == 'CRITICAL')
+            
+            alerts['summary'] = {
+                'total_alerts': total_alerts,
+                'critical_alerts': critical_alerts,
+                'warning_alerts': total_alerts - critical_alerts,
+                'check_timestamp': datetime.now().isoformat()
+            }
+            
+            self.logger.info(f"✅ Проверка завершена: {total_alerts} уведомлений")
+            
+            return alerts
+            
+        except Exception as e:
+            self.logger.error(f"❌ Ошибка проверки уведомлений: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'price_alerts': [],
+                'availability_alerts': [],
+                'trend_alerts': [],
+                'quality_alerts': [],
+                'summary': {'total_alerts': 0, 'critical_alerts': 0, 'warning_alerts': 0}
+            }
+    
+    def _check_price_alerts(self, price_comparison: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Проверка алертов по ценам"""
+        alerts = []
+        
+        if not price_comparison.get('success'):
+            return alerts
+        
+        # Значительные изменения цен
+        for changed_product in price_comparison.get('changed_products', []):
+            price_change = changed_product.get('price_change', {})
+            
+            if price_change.get('significant', False):
+                alerts.append({
+                    'type': 'PRICE_CHANGE',
+                    'level': 'CRITICAL',
+                    'product': changed_product.get('name', 'Unknown'),
+                    'message': f"Значительное изменение цены: {price_change['change_percent']:.1f}%",
+                    'details': {
+                        'old_price': price_change['old_price'],
+                        'new_price': price_change['new_price'],
+                        'change_percent': price_change['change_percent'],
+                        'direction': price_change['change_direction']
+                    }
+                })
+        
+        return alerts
+    
+    def _check_availability_alerts(self, price_comparison: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Проверка алертов по наличию"""
+        alerts = []
+        
+        if not price_comparison.get('success'):
+            return alerts
+        
+        # Новые товары
+        if self.alert_settings['new_product_alert']:
+            for new_product in price_comparison.get('new_products', []):
+                alerts.append({
+                    'type': 'NEW_PRODUCT',
+                    'level': 'WARNING',
+                    'product': new_product.get('name', 'Unknown'),
+                    'message': "Появился новый товар",
+                    'details': {
+                        'price': new_product.get('price'),
+                        'category': new_product.get('category')
+                    }
+                })
+        
+        # Пропавшие товары
+        if self.alert_settings['discontinued_product_alert']:
+            for discontinued_product in price_comparison.get('discontinued_products', []):
+                alerts.append({
+                    'type': 'DISCONTINUED_PRODUCT',
+                    'level': 'WARNING',
+                    'product': discontinued_product.get('name', 'Unknown'),
+                    'message': "Товар больше не доступен",
+                    'details': {
+                        'last_price': discontinued_product.get('price'),
+                        'last_seen': datetime.now().isoformat()
+                    }
+                })
+        
+        return alerts
+    
+    def _check_trend_alerts(self, trend_analysis: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Проверка алертов по трендам"""
+        alerts = []
+        
+        if not trend_analysis.get('success'):
+            return alerts
+        
+        # Высокая волатильность
+        if self.alert_settings['high_volatility_alert']:
+            volatility_analysis = trend_analysis.get('summary', {}).get('volatility_analysis', {})
+            high_vol_count = volatility_analysis.get('high_volatility_count', 0)
+            
+            if high_vol_count > 5:  # Если больше 5 товаров с высокой волатильностью
+                alerts.append({
+                    'type': 'HIGH_VOLATILITY',
+                    'level': 'WARNING',
+                    'message': f"Высокая волатильность цен у {high_vol_count} товаров",
+                    'details': {
+                        'affected_products': high_vol_count,
+                        'average_volatility': volatility_analysis.get('average_volatility', 0)
+                    }
+                })
+        
+        # Резкое изменение тренда
+        if self.alert_settings['trend_reversal_alert']:
+            # Здесь можно добавить логику обнаружения разворота тренда
+            pass
+        
+        return alerts
+    
+    def _check_quality_alerts(self, validation_results: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Проверка алертов по качеству данных"""
+        alerts = []
+        
+        if not validation_results.get('success'):
+            return alerts
+        
+        quality_metrics = validation_results.get('quality_metrics', {})
+        quality_score = quality_metrics.get('quality_score', 1.0)
+        
+        if quality_score < 0.7:
+            alerts.append({
+                'type': 'DATA_QUALITY',
+                'level': 'CRITICAL',
+                'message': f"Низкое качество данных: {quality_score:.2f}",
+                'details': {
+                    'quality_score': quality_score,
+                    'valid_products': quality_metrics.get('valid_products_count', 0),
+                    'invalid_products': quality_metrics.get('invalid_products_count', 0)
+                }
+            })
+        
+        # Много невалидных товаров
+        invalid_count = quality_metrics.get('invalid_products_count', 0)
+        total_count = validation_results.get('total_products', 0)
+        
+        if total_count > 0 and invalid_count / total_count > 0.3:  # 30% невалидных
+            alerts.append({
+                'type': 'HIGH_INVALID_DATA',
+                'level': 'WARNING', 
+                'message': f"Много невалидных данных: {invalid_count} из {total_count}",
+                'details': {
+                    'invalid_count': invalid_count,
+                    'total_count': total_count,
+                    'invalid_ratio': invalid_count / total_count
+                }
+            })
+        
+        return alerts
+    
+    def send_alerts(self, alerts: Dict[str, Any], method: str = 'log') -> bool:
+        """
+        Отправка уведомлений
+        
+        Args:
+            alerts: Собранные алерты
+            method: Метод отправки ('log', 'email', 'console')
+            
+        Returns:
+            bool: Успешность отправки
+        """
+        try:
+            if method == 'log':
+                return self._send_to_log(alerts)
+            elif method == 'console':
+                return self._send_to_console(alerts)
+            elif method == 'email':
+                return self._send_to_email(alerts)
+            else:
+                self.logger.warning(f"⚠️ Неизвестный метод отправки: {method}")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"❌ Ошибка отправки уведомлений: {e}")
+            return False
+    
+    def _send_to_log(self, alerts: Dict[str, Any]) -> bool:
+        """Отправка уведомлений в лог"""
+        summary = alerts.get('summary', {})
+        
+        if summary.get('total_alerts', 0) == 0:
+            self.logger.info("✅ Критических уведомлений нет")
+            return True
+        
+        self.logger.warning(f"🚨 Обнаружено уведомлений: {summary['total_alerts']} "
+                          f"(критических: {summary['critical_alerts']})")
+        
+        # Логируем каждое уведомление
+        for alert_type, alert_list in alerts.items():
+            if isinstance(alert_list, list):
+                for alert in alert_list:
+                    level = alert.get('level', 'INFO')
+                    message = alert.get('message', '')
+                    
+                    if level == 'CRITICAL':
+                        self.logger.error(f"🚨 CRITICAL: {message}")
+                    else:
+                        self.logger.warning(f"⚠️ WARNING: {message}")
+        
+        return True
+    
+    def _send_to_console(self, alerts: Dict[str, Any]) -> bool:
+        """Отправка уведомлений в консоль"""
+        summary = alerts.get('summary', {})
+        
+        if summary.get('total_alerts', 0) == 0:
+            print("✅ Критических уведомлений нет")
+            return True
+        
+        print("\n" + "="*60)
+        print("🚨 СИСТЕМА УВЕДОМЛЕНИЙ")
+        print("="*60)
+        print(f"Всего уведомлений: {summary['total_alerts']}")
+        print(f"Критических: {summary['critical_alerts']}")
+        print(f"Предупреждений: {summary['warning_alerts']}")
+        print("-"*60)
+        
+        for alert_type, alert_list in alerts.items():
+            if isinstance(alert_list, list) and alert_list:
+                print(f"\n📋 {alert_type.upper()}:")
+                for alert in alert_list:
+                    level_icon = "🔴" if alert.get('level') == 'CRITICAL' else "🟡"
+                    print(f"  {level_icon} {alert.get('message')}")
+        
+        print("="*60)
+        return True
+    
+    def _send_to_email(self, alerts: Dict[str, Any]) -> bool:
+        """Отправка уведомлений по email (заглушка)"""
+        # TODO: Реализовать отправку email
+        self.logger.info("📧 Отправка уведомлений по email (не реализовано)")
+        return False
+    
+    def generate_alert_report(self, alerts: Dict[str, Any]) -> Dict[str, Any]:
+        """Генерация отчета по уведомлениям"""
+        return {
+            'report_timestamp': datetime.now().isoformat(),
+            'alerts_summary': alerts.get('summary', {}),
+            'alert_details': {
+                'price_alerts': alerts.get('price_alerts', []),
+                'availability_alerts': alerts.get('availability_alerts', []),
+                'trend_alerts': alerts.get('trend_alerts', []),
+                'quality_alerts': alerts.get('quality_alerts', [])
+            },
+            'recommendations': self._generate_alert_recommendations(alerts)
+        }
+    
+    def _generate_alert_recommendations(self, alerts: Dict[str, Any]) -> List[str]:
+        """Генерация рекомендаций на основе алертов"""
+        recommendations = []
+        summary = alerts.get('summary', {})
+        
+        if summary.get('critical_alerts', 0) > 0:
+            recommendations.append("Немедленно проверьте критические уведомления")
+        
+        if len(alerts.get('price_alerts', [])) > 10:
+            recommendations.append("Проведите анализ ценовой политики")
+        
+        if len(alerts.get('quality_alerts', [])) > 0:
+            recommendations.append("Улучшите качество собираемых данных")
+        
+        return recommendations

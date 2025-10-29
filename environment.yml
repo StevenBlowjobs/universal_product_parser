@@ -1,0 +1,14 @@
+name: universal_parser
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.9
+  - pip
+  - chromium
+  - geckodriver
+  - opencv
+  - poppler
+  - graphviz
+  - pip:
+    - -r requirements.txt

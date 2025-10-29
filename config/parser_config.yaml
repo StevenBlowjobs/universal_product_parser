@@ -1,0 +1,201 @@
+# Основная конфигурация парсера
+parser:
+  # Основные настройки
+  name: "Universal Product Parser"
+  version: "1.0.0"
+  request_timeout: 30
+  max_retries: 3
+  retry_delay: 2
+  user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+  
+  # Настройки браузера
+  browser:
+    headless: true
+    viewport_width: 1920
+    viewport_height: 1080
+    slow_mo: 100
+    ignore_https_errors: true
+    
+  # Анти-детект система
+  anti_detection:
+    use_proxy: false
+    proxy_list: "data/input/proxies.txt"
+    block_images: false  # ИЗМЕНЕНО: false чтобы загружать изображения товаров
+    block_css: true
+    block_fonts: true
+    random_delays: true
+    min_delay: 1
+    max_delay: 5
+    rotate_user_agents: true
+    user_agents_file: "data/input/user_agents.txt"
+    
+  # Навигация
+  navigation:
+    max_categories: 10
+    max_products_per_category: 50
+    pagination_timeout: 5
+    scroll_delay: 1
+    max_scroll_attempts: 3
+    
+  # Извлечение контента
+  content_extraction:
+    extract_images: true
+    extract_description: true
+    extract_characteristics: true
+    extract_reviews: false
+    extract_rating: true
+    extract_availability: true
+    
+    # Селекторы по умолчанию (будут переопределены автодетектом)
+    default_selectors:
+      product: ".product, .item, .goods, .card"
+      name: "h1, h2, .title, .name, [class*='title'], [class*='name']"
+      price: ".price, .cost, .value, [class*='price']"
+      description: ".description, .text, .info, [class*='description']"
+      image: "img[src*='product'], .product-image img"
+      characteristics: ".specs, .features, .properties, [class*='char']"
+
+# НОВЫЙ РАЗДЕЛ: Генерация артикулов
+article_generation:
+  method: "hash_based"  # hash_based, composite_based, sequential
+  category_prefixes:
+    ноутбук: "NB"
+    телефон: "PH"
+    телевизор: "TV"
+    холодильник: "FR"
+    стиральная: "WM"
+    мебель: "FRN"
+    default: "GEN"
+  
+  # Настройки хеш-генерации
+  hash_settings:
+    length: 8
+    use_category_prefix: true
+    include_price: true
+    
+  # Настройки композитной генерации  
+  composite_settings:
+    category_length: 3
+    brand_length: 3
+    unique_part_length: 4
+
+# НОВЫЙ РАЗДЕЛ: Обработка изображений товаров
+product_images_processing:
+  enabled: true
+  max_images_per_product: 10
+  parallel_processing: true
+  max_workers: 4
+  
+  # Модерация изображений
+  moderation:
+    enabled: true
+    quality_threshold: 0.7
+    min_width: 400
+    min_height: 400
+    max_file_size: 10485760  # 10MB
+    
+  # Выходные настройки
+  output:
+    save_original: false
+    save_intermediate: false
+    formats: ['jpg', 'webp']
+    quality: 85
+    main_image_size: [800, 800]
+    gallery_image_size: [400, 400]
+    output_directory: "data/output/processed_images/"
+    
+  # Структура папок
+  directory_structure:
+    original: "original/"
+    no_watermark: "no_watermark/" 
+    no_background: "no_background/"
+    final: "final/"
+    moderated: "moderated/"
+
+# Конфигурация модулей
+modules:
+  # Обработка контента
+  content_processor:
+    enabled: true
+    config_file: "config/nlp_config.yaml"
+    
+  # Обработка изображений  
+  image_processor:
+    enabled: true
+    config_file: "config/image_processing.yaml"
+    
+  # Анализ данных
+  data_analyzer:
+    enabled: true
+    price_comparison: true
+    trend_analysis: true
+    validation: true
+    alerts: true
+    
+  # Экспорт
+  exporter:
+    enabled: true
+    excel_format: true
+    json_backup: true
+    include_images: true  # ИЗМЕНЕНО: true чтобы включать информацию об изображениях
+    use_new_structure: true  # НОВАЯ НАСТРОЙКА: использовать новую структуру отчета
+
+# Настройки сайтов (можно переопределить для конкретных сайтов)
+sites:
+  default:
+    wait_for_element_timeout: 10
+    max_wait_time: 60
+    dynamic_content_wait: 3
+    
+  # Пример для конкретного сайта
+  "example.com":
+    wait_for_element_timeout: 15
+    custom_selectors:
+      product: ".product-item"
+      price: ".product-price"
+
+# Мониторинг и логирование
+monitoring:
+  log_level: "INFO"
+  log_config: "config/logging_config.conf"
+  save_debug_data: true
+  performance_metrics: true
+  
+  # Уведомления
+  notifications:
+    email_alerts: false
+    telegram_alerts: false
+    critical_errors_only: true
+
+# Пути к данным
+paths:
+  input: "data/input/"
+  output: "data/output/"
+  temp: "data/temp/"
+  models: "models/"
+  logs: "data/output/logs/"
+  
+  # Подпапки
+  subdirectories:
+    input:
+      - "target_urls.txt"
+      - "custom_backgrounds/"
+      - "synonym_dictionaries/"
+      - "user_agents.txt"
+      - "proxies.txt"
+    output:
+      - "excel_exports/"
+      - "processed_images/"
+      - "logs/"
+      - "analysis/"
+    temp:
+      - "cache/"
+      - "session_data/"
+
+# Настройки производительности
+performance:
+  max_concurrent_requests: 5
+  use_cache: true
+  cache_ttl: 3600  # 1 час
+  memory_limit: "2G"
+  cleanup_interval: 3600  # 1 час

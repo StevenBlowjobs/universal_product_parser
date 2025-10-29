@@ -1,0 +1,199 @@
+# Конфигурация обработки изображений
+image_processing:
+  # Основные настройки
+  enabled: true
+  output_quality: 85
+  output_format: "webp"
+  max_image_size: "1920x1080"
+  preserve_aspect_ratio: true
+  
+  # НОВЫЙ РАЗДЕЛ: Управление изображениями товаров
+  product_images:
+    enabled: true
+    max_images_per_product: 10
+    parallel_processing: true
+    max_workers: 4
+    
+    # Модерация изображений
+    moderation:
+      enabled: true
+      quality_threshold: 0.7
+      min_width: 400
+      min_height: 400
+      max_file_size: 10485760  # 10MB
+      
+    # Выходные настройки
+    output:
+      save_original: false
+      save_intermediate: false
+      formats: ['jpg', 'webp']
+      quality: 85
+      main_image_size: [800, 800]
+      gallery_image_size: [400, 400]
+      output_directory: "data/output/processed_images/"
+      
+    # Структура папок
+    directory_structure:
+      original: "original/"
+      no_watermark: "no_watermark/" 
+      no_background: "no_background/"
+      final: "final/"
+      moderated: "moderated/"
+  
+  # Водяные знаки
+  watermark_removal:
+    enabled: true
+    method: "combined"  # neural, inpainting, combined
+    confidence_threshold: 0.7
+    max_removal_attempts: 3
+    verify_removal: true
+    
+    # Детекция водяных знаков
+    detection:
+      min_watermark_size: 50
+      max_watermark_size: 500
+      color_sensitivity: 0.8
+      texture_analysis: true
+      
+    # Нейросетевая модель
+    neural_model:
+      model_path: "models/watermark_detector.pth"
+      input_size: 512
+      batch_size: 4
+      
+  # Удаление фона
+  background_removal:
+    enabled: true
+    method: "u2net"  # u2net, rembg, custom
+    model_path: "models/u2net.onnx"
+    threshold: 0.5
+    post_processing: true
+    
+    # Настройки постобработки
+    post_processing:
+      smooth_edges: true
+      feather_radius: 2
+      remove_small_objects: true
+      min_object_size: 100
+      
+  # Замена фона
+  background_replacement:
+    enabled: true
+    default_background: "white"  # white, transparent, custom
+    custom_background_path: "data/input/custom_backgrounds/"
+    
+    # Настройки blending
+    blending:
+      method: "alpha"  # alpha, seamless, lighten
+      opacity: 1.0
+      match_lighting: true
+      shadow_preservation: true
+      
+  # Манипуляции с пикселями
+  pixel_manipulation:
+    enabled: true
+    operations:
+      - "resize"
+      - "compress"
+      - "filter"
+      - "enhance"
+      
+    # Фильтры и улучшения
+    filters:
+      sharpening:
+        enabled: true
+        strength: 0.5
+      contrast:
+        enabled: true
+        factor: 1.1
+      saturation:
+        enabled: false
+        factor: 1.0
+      noise_reduction:
+        enabled: true
+        strength: 0.3
+        
+  # Производительность
+  performance:
+    max_workers: 2
+    batch_size: 1
+    use_gpu: true
+    gpu_memory_limit: "4G"
+    cache_processed_images: true
+    cache_size: 100
+    
+  # Форматы и лимиты
+  formats:
+    supported_input:
+      - "jpg"
+      - "jpeg"
+      - "png"
+      - "webp"
+      - "gif"
+    supported_output:
+      - "png"
+      - "webp"
+      - "jpg"
+      
+  limits:
+    max_file_size: 10485760  # 10MB
+    min_resolution: "100x100"
+    max_resolution: "3840x2160"
+    
+  # Временные файлы
+  temp_files:
+    keep_original: true
+    keep_intermediate: false
+    auto_cleanup: true
+    cleanup_interval_hours: 24
+
+# НОВЫЙ РАЗДЕЛ: Генерация артикулов
+article_generation:
+  method: "hash_based"  # hash_based, composite_based, sequential
+  category_prefixes:
+    ноутбук: "NB"
+    телефон: "PH" 
+    телевизор: "TV"
+    холодильник: "FR"
+    стиральная: "WM"
+    мебель: "FRN"
+    default: "GEN"
+  
+  # Настройки хеш-генерации
+  hash_settings:
+    length: 8
+    use_category_prefix: true
+    include_price: true
+    
+  # Настройки композитной генерации  
+  composite_settings:
+    category_length: 3
+    brand_length: 3
+    unique_part_length: 4
+
+# Настройки ML моделей
+models:
+  u2net:
+    version: "1.0"
+    input_size: 320
+    output_channels: 1
+    normalize_input: true
+    
+  watermark_detector:
+    version: "1.0"
+    architecture: "resnet50"
+    num_classes: 2
+    pretrained: true
+    
+  # Загрузка моделей
+  model_loading:
+    preload: true
+    lazy_loading: false
+    verification: true
+
+# Мониторинг и логирование
+monitoring:
+  log_processing_times: true
+  log_memory_usage: true
+  save_examples: true
+  examples_path: "data/output/processed_images/examples/"
